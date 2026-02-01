@@ -4,26 +4,37 @@ import net.minecraftforge.common.config.Configuration;
 import net.minecraftforge.common.config.Property;
 
 public class ModConfigs {
-	private static final String	CATAGORY_SERVER	= "server";
+    private static final String CATEGORY_SERVER = "server";
+    public static boolean disabled = false;
+    public static int dataRate = 2048;
+    public static byte renderDistance = 7;
+    public static boolean alternativePortal = false;
+    public static boolean disableRenderInRenderPortal = false;
+    public static boolean forceLoadAllWorlds = false;
 
-	public static boolean		disabled		= false;
+    public static void loadConfig(Configuration config) {
+        Property off = config.get(CATEGORY_SERVER, "disabled", disabled);
+        off.setComment("On the client this disabled world renders, entirely, preventing world requests. On the server this disables sending world info to all clients.");
+        disabled = off.getBoolean(disabled);
 
-	public static int			dataRate		= 2048;
+        Property data = config.get(CATEGORY_SERVER, "datarate", dataRate);
+        data.setComment("The number of bytes to send per tick before the server cuts off sending. Only applies to other-world chunks. Default: " + dataRate);
+        dataRate = data.getInt(dataRate);
 
-	public static byte			renderDistance	= 7;
+        if (dataRate <= 0) disabled = true;
 
-	public static void loadConfigs(Configuration config) {
-		Property off = config.get(CATAGORY_SERVER, "disabled", disabled);
-		off.comment = "On the client this disables other world renders entirely, preventing world requests. On the server this disables sending world info to all clients.";
-		disabled = off.getBoolean(disabled);
+        Property alternative = config.get(CATEGORY_SERVER, "alternativePortal", alternativePortal);
+        alternative.setComment("Whether the portal should have an alternative animation (debug)");
+        alternativePortal = alternative.getBoolean();
 
-		Property d = config.get(CATAGORY_SERVER, "datarate", dataRate);
-		d.comment = "The number of bytes to send per tick before the server cuts off sending. Only applies to other-world chunks. Default: " + dataRate;
-		dataRate = d.getInt(dataRate);
+        Property renderInRender = config.get(CATEGORY_SERVER, "disableRenderInRender", disableRenderInRenderPortal);
+        renderInRender.setComment("Whether to allow render portals to render render portals in them");
+        disableRenderInRenderPortal = renderInRender.getBoolean();
 
-		if (dataRate <= 0) disabled = true;
+        Property loading = config.get(CATEGORY_SERVER, "forceLoadAllWorlds", forceLoadAllWorlds);
+        loading.setComment("When all else fails, enable this (default: false)");
+        forceLoadAllWorlds = loading.getBoolean();
 
-		if (config.hasChanged()) config.save();
-	}
-
+        if (config.hasChanged()) config.save();
+    }
 }

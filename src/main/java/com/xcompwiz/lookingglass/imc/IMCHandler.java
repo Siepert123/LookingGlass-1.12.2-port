@@ -1,41 +1,42 @@
 package com.xcompwiz.lookingglass.imc;
 
+import com.google.common.collect.ImmutableList;
+import com.xcompwiz.lookingglass.LookingGlass;
+import net.minecraftforge.fml.common.event.FMLInterModComms;
+
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableList;
-import com.xcompwiz.lookingglass.log.LoggerUtils;
-
-import cpw.mods.fml.common.event.FMLInterModComms.IMCMessage;
-
 public class IMCHandler {
-	public interface IMCProcessor {
-		public void process(IMCMessage message);
-	}
+    interface IMCProcessor {
+        void process(FMLInterModComms.IMCMessage message);
+    }
 
-	private static Map<String, IMCProcessor>	processors	= new HashMap<String, IMCProcessor>();
+    private static final Map<String, IMCProcessor> processors = new HashMap<>();
 
-	static {
-		registerProcessor("api", new IMCAPIRegister());
-	}
+    static {
+        registerProcessor("api", new IMCAPIRegister());
+    }
 
-	private static void registerProcessor(String key, IMCProcessor processor) {
-		processors.put(key.toLowerCase(), processor);
-	}
+    private static void registerProcessor(String key, IMCProcessor processor) {
+        processors.put(key, processor);
+    }
 
-	public static void process(ImmutableList<IMCMessage> messages) {
-		for (IMCMessage message : messages) {
-			String key = message.key.toLowerCase();
-			IMCProcessor process = processors.get(key);
-			if (process == null) {
-				LoggerUtils.error("IMC message '%s' from [%s] unrecognized", key, message.getSender());
-			}
-			try {
-				process.process(message);
-			} catch (Exception e) {
-				LoggerUtils.error("Failed to process IMC message '%s' from [%s]", key, message.getSender());
-				e.printStackTrace();
-			}
-		}
-	}
+    public static void process(ImmutableList<FMLInterModComms.IMCMessage> messages) {
+        for (FMLInterModComms.IMCMessage message : messages) {
+            String key = message.key.toLowerCase(Locale.ENGLISH);
+            IMCProcessor process = processors.get(key);
+            if (process == null) {
+                LookingGlass.logger().error("IMC message '{}' from [{}] unrecognized", key, message.getSender());
+                continue;
+            }
+            try {
+                process.process(message);
+            } catch (Exception e) {
+                LookingGlass.logger().error("Failed to process IMC message '{}' from [{}]", key, message.getSender());
+                e.printStackTrace(System.err);
+            }
+        }
+    }
 }

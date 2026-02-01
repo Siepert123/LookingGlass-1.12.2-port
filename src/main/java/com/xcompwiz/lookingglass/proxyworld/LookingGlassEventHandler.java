@@ -1,119 +1,96 @@
 package com.xcompwiz.lookingglass.proxyworld;
 
+import com.xcompwiz.lookingglass.LookingGlass;
+import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
+import com.xcompwiz.lookingglass.render.PerspectiveRenderManager;
+import com.xcompwiz.lookingglass.render.WorldViewRenderManager;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.TickEvent;
+import net.minecraftforge.fml.common.network.FMLNetworkEvent;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.PrintStream;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.WorldClient;
-
-import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
-import com.xcompwiz.lookingglass.log.LoggerUtils;
-import com.xcompwiz.lookingglass.render.PerspectiveRenderManager;
-import com.xcompwiz.lookingglass.render.WorldViewRenderManager;
-
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
-import cpw.mods.fml.common.gameevent.TickEvent;
-import cpw.mods.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent;
-import cpw.mods.fml.relauncher.Side;
-import cpw.mods.fml.relauncher.SideOnly;
-
-/**
- * This class handles the FML events. Primarily it is used to listen for tick events.
- */
 public class LookingGlassEventHandler {
+    private final PrintStream logger;
 
-	/** An output stream we can use for proxy world logging */
-	private final PrintStream	printstream;
+    @SideOnly(Side.CLIENT)
+    private WorldClient previousWorld;
 
-	/** The client world as we last saw it. We use this to check if the client has changed worlds */
-	@SideOnly(Side.CLIENT)
-	private WorldClient			previousWorld;
+    @SideOnly(Side.CLIENT)
+    private int tickCounter;
 
-	/** A simple accumulator to handle triggering freeing world views and such */
-	@SideOnly(Side.CLIENT)
-	private int					tickcounter;
+    public LookingGlassEventHandler(File logFile) {
+        PrintStream stream = null;
+        try {
+            stream = new PrintStream(logFile);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace(System.err);
+        } finally {
+            this.logger = stream;
+        }
+        if (this.logger == null) throw new RuntimeException("Could not set up proxyworlds debug logger");
+    }
 
-	public LookingGlassEventHandler(File logfile) {
-		PrintStream stream = null;
-		try {
-			stream = new PrintStream(logfile);
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} finally {
-			printstream = stream;
-		}
-		if (printstream == null) throw new RuntimeException("Could not set up debug exception logger file for Proxy World system");
-	}
+    @SideOnly(Side.CLIENT)
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent event) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc.world == null) return;
+        if (event.phase != TickEvent.Phase.START) return;
 
-	@SideOnly(Side.CLIENT)
-	@SubscribeEvent
-	public void onClientTick(TickEvent.ClientTickEvent event) {
-		Minecraft mc = Minecraft.getMinecraft();
-		// If no client world we're not playing. Abort.
-		if (mc.theWorld == null) return;
-		// We don't want to tick twice per tick loop. Just once.  We chose to tick at the start of the tick loop.
-		if (event.phase != TickEvent.Phase.START) return;
+        if (++this.tickCounter % 200 == 0) ProxyWorldManager.detectFreedWorldViews();
 
-		// Every now and then we want to check to see if there are frame buffers we could free 
-		if (++this.tickcounter % 200 == 0) ProxyWorldManager.detectFreedWorldViews();
+        if (mc.world != this.previousWorld) {
+            if (this.previousWorld != null) this.previousWorld.removeAllEntities();
+            this.previousWorld = mc.world;
 
-		// Handle whenever the client world has changed since we last looked
-		if (mc.theWorld != previousWorld) {
-			// We need to handle the removal of the old world.  Particularly, the player will still be visible in it.
-			// We may consider replacing the old client world with a new proxy world.
-			if (previousWorld != null) previousWorld.removeAllEntities(); //TODO: This is hardly an ideal solution (It also doesn't seem to work well)
-			previousWorld = mc.theWorld; // At this point we can safely assert that the client world has changed
+            ProxyWorldManager.handleWorldChange(mc.world);
+        }
 
-			// We let our local world manager know that the client world changed.
-			ProxyWorldManager.handleWorldChange(mc.theWorld);
-		}
+        WorldClient worldBackup = mc.world;
+        for (WorldClient proxyWorld : ProxyWorldManager.getProxyWorlds()) {
+            if (proxyWorld.getLastLightningBolt() > 0) proxyWorld.setLastLightningBolt(proxyWorld.getLastLightningBolt() - 1);
+            if (worldBackup == proxyWorld) continue;
+            try {
+                mc.world = proxyWorld;
+                proxyWorld.tick();
+            } catch (Exception e) {
+                LookingGlass.logger().error("Client proxy dimension had error while ticking: {}", e.toString());
+                e.printStackTrace(this.logger);
+            }
+        }
+        mc.world = worldBackup;
+    }
 
-		// Tick loop for our own worlds.
-		WorldClient worldBackup = mc.theWorld;
-		for (WorldClient proxyworld : ProxyWorldManager.getProxyworlds()) {
-			if (proxyworld.lastLightningBolt > 0) --proxyworld.lastLightningBolt;
-			if (worldBackup == proxyworld) continue; // This prevents us from double ticking the client world.
-			try {
-				mc.theWorld = proxyworld;
-				//TODO: relays for views (renderGlobal and effectRenderer) (See ProxyWorld.makeFireworks ln23) 
-				proxyworld.tick();
-			} catch (Exception e) {
-				LoggerUtils.error("Client Proxy Dim had error while ticking: %s", e.getLocalizedMessage());
-				e.printStackTrace(printstream);
-			}
-		}
-		mc.theWorld = worldBackup;
-	}
+    @SideOnly(Side.CLIENT)
+    @SubscribeEvent
+    public void onRenderTick(TickEvent.RenderTickEvent event) {
+        if (Minecraft.getMinecraft().world == null) return;
+        if (event.phase == TickEvent.Phase.START) {
+            PerspectiveRenderManager.onRenderTick(this.logger);
+            return;
+        }
+        if (event.phase == TickEvent.Phase.END) {
+            WorldViewRenderManager.onRenderTick(this.logger);
+            return;
+        }
+    }
 
-	@SideOnly(Side.CLIENT)
-	@SubscribeEvent
-	public void onRenderTick(TickEvent.RenderTickEvent event) {
-		// If no client world we're not playing. Abort.
-		if (Minecraft.getMinecraft().theWorld == null) return;
-		if (event.phase == TickEvent.Phase.START) {
-			// Anything we need to render for the current frame should happen either during or before the main world render
-			// Here we call the renderer for "live portal" renders.
-			PerspectiveRenderManager.onRenderTick(printstream);
-			return;
-		}
-		if (event.phase == TickEvent.Phase.END) {
-			// We render the world views at the end of the render tick.  
-			WorldViewRenderManager.onRenderTick(printstream);
-			return;
-		}
-	}
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        ChunkFinderManager.instance.tick();
+    }
 
-	@SubscribeEvent
-	public void onServerTick(TickEvent.ServerTickEvent event) {
-		if (event.phase != TickEvent.Phase.END) return;
-		// On server ticks we try to send clients who need chunk data some of that data they need
-		ChunkFinderManager.instance.tick();
-	}
-
-	@SubscribeEvent
-	public void onClientDisconnect(ClientDisconnectionFromServerEvent event) {
-		// Abandon ship!
-		ProxyWorldManager.clearProxyworlds();
-	}
+    @SideOnly(Side.CLIENT)
+    @SubscribeEvent
+    public void onClientDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
+        ProxyWorldManager.clearProxyWorlds();
+    }
 }

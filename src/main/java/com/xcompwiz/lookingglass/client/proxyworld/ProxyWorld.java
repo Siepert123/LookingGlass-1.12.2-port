@@ -1,28 +1,83 @@
 package com.xcompwiz.lookingglass.client.proxyworld;
 
+import mcp.MethodsReturnNonnullByDefault;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.particle.EntityFireworkStarterFX;
+import net.minecraft.client.particle.ParticleFirework;
+import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.util.SoundCategory;
+import net.minecraft.util.SoundEvent;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.GameType;
 import net.minecraft.world.WorldSettings;
-import net.minecraft.world.WorldSettings.GameType;
 import net.minecraft.world.WorldType;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
-// FIXME: AAHH! Fake world classes! EXTERMINATE!
+import javax.annotation.Nullable;
+import javax.annotation.ParametersAreNonnullByDefault;
+
+@SideOnly(Side.CLIENT)
+@ParametersAreNonnullByDefault
+@MethodsReturnNonnullByDefault
 public class ProxyWorld extends WorldClient {
-	public ProxyWorld(int dimensionID) {
-		super(Minecraft.getMinecraft().getNetHandler(), new WorldSettings(0L, GameType.SURVIVAL, true, false, WorldType.DEFAULT), dimensionID, Minecraft.getMinecraft().gameSettings.difficulty, Minecraft.getMinecraft().theWorld.theProfiler);
-	}
+    public ProxyWorld(int dimensionID) {
+        super(Minecraft.getMinecraft().getConnection(),
+                new WorldSettings(0L, GameType.SURVIVAL, true, false, WorldType.DEFAULT),
+                dimensionID,
+                Minecraft.getMinecraft().gameSettings.difficulty,
+                Minecraft.getMinecraft().world.profiler
+        );
+    }
 
-	// TODO: In order to eliminate this class we may need an event in this function to allow canceling/redirecting sounds
-	@Override
-	public void playSound(double par1, double par3, double par5, String par7Str, float par8, float par9, boolean par10) {}
+    @Override
+    public void playSound(double x, double y, double z,
+                          SoundEvent soundIn, SoundCategory category, float volume, float pitch, boolean distanceDelay) {
 
-	// TODO: In order to eliminate this class we need to create a redirection wrapper class for the mc.effectRenderer which does this for all views.
-	@Override
-	public void makeFireworks(double par1, double par3, double par5, double par7, double par9, double par11, NBTTagCompound par13NBTTagCompound) {
-		for (WorldView activeview : ProxyWorldManager.getWorldViews(this.provider.dimensionId)) {
-			activeview.getEffectRenderer().addEffect(new EntityFireworkStarterFX(this, par1, par3, par5, par7, par9, par11, activeview.getEffectRenderer(), par13NBTTagCompound));
-		}
-	}
+    }
+
+    @Override
+    public void playSound(@Nullable EntityPlayer player, BlockPos pos,
+                          SoundEvent soundIn, SoundCategory category, float volume, float pitch) {
+
+    }
+
+    @Override
+    public void playSound(BlockPos pos,
+                          SoundEvent soundIn, SoundCategory category, float volume, float pitch, boolean distanceDelay) {
+
+    }
+
+    @Override
+    public void playSound(@Nullable EntityPlayer player, double x, double y, double z,
+                          SoundEvent soundIn, SoundCategory category, float volume, float pitch) {
+
+    }
+
+    @Override
+    public void playBroadcastSound(int id, BlockPos pos, int data) {
+
+    }
+
+    @Override
+    public void playEvent(int type, BlockPos pos, int data) {
+
+    }
+
+    @Override
+    public void playEvent(@Nullable EntityPlayer player, int type, BlockPos pos, int data) {
+
+    }
+
+    @Override
+    public void makeFireworks(double x, double y, double z, double motionX, double motionY, double motionZ, @Nullable NBTTagCompound compound) {
+        for (WorldView activeView : ProxyWorldManager.getWorldViews(this.provider.getDimension())) {
+            activeView.getEffectRenderer().addEffect(
+                    new ParticleFirework.Starter(
+                            this, x, y, z, motionX, motionY, motionZ, activeView.getEffectRenderer(), compound
+                    )
+            );
+        }
+    }
 }

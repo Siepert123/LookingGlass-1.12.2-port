@@ -1,60 +1,50 @@
 package com.xcompwiz.lookingglass.network.packet;
 
+import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraftforge.fml.common.network.ByteBufUtils;
+import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
 
-import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
-
-import cpw.mods.fml.common.network.ByteBufUtils;
-import cpw.mods.fml.common.network.internal.FMLProxyPacket;
-
-/**
- * Based on code from Ken Butler/shadowking97
- */
 public class PacketTileEntityNBT extends PacketHandlerBase {
+    public static FMLProxyPacket createPacket(int x, int y, int z, NBTTagCompound nbt, int dimension) {
+        ByteBuf data =createDataBuffer(PacketTileEntityNBT.class);
 
-	public static FMLProxyPacket createPacket(int xPos, int yPos, int zPos, NBTTagCompound nbt, int dim) {
-		// This line may look like black magic (and, well, it is), but it's actually just returning a class reference for this class. Copy-paste safe.
-		ByteBuf data = PacketHandlerBase.createDataBuffer((Class<? extends PacketHandlerBase>) new Object() {}.getClass().getEnclosingClass());
+        data.writeInt(dimension);
+        data.writeInt(x).writeInt(y).writeInt(z);
+        ByteBufUtils.writeTag(data, nbt);
 
-		data.writeInt(dim);
-		data.writeInt(xPos);
-		data.writeInt(yPos);
-		data.writeInt(zPos);
-		ByteBufUtils.writeTag(data, nbt);
+        return buildPacket(data);
+    }
 
-		return buildPacket(data);
-	}
+    @Override
+    public void handle(ByteBuf data, EntityPlayer player) {
+        int dimension = data.readInt();
+        BlockPos pos = new BlockPos(data.readInt(), data.readInt(), data.readInt());
+        NBTTagCompound nbt = ByteBufUtils.readTag(data);
 
-	@Override
-	public void handle(ByteBuf data, EntityPlayer player) {
-		int dimension = data.readInt();
-		int xPos = data.readInt();
-		int yPos = data.readInt();
-		int zPos = data.readInt();
-		NBTTagCompound nbt = ByteBufUtils.readTag(data);
+        WorldClient proxyWorld = ProxyWorldManager.getProxyWorld(dimension);
+        if (proxyWorld == null) return;
+        if (proxyWorld.provider.getDimension() != dimension) return;
+        if (proxyWorld.isBlockLoaded(pos)) {
+            TileEntity te = proxyWorld.getTileEntity(pos);
 
-		WorldClient proxyworld = ProxyWorldManager.getProxyworld(dimension);
-		if (proxyworld == null) return;
-		if (proxyworld.provider.dimensionId != dimension) return;
-		if (proxyworld.blockExists(xPos, yPos, zPos)) {
-			TileEntity tileentity = proxyworld.getTileEntity(xPos, yPos, zPos);
+            if (te != null) {
+                te.validate();
+                te.readFromNBT(nbt);
+            } else {
+                te = TileEntity.create(proxyWorld, nbt);
+                if (te != null) {
+                    te.validate();
+                    proxyWorld.addTileEntity(te);
+                }
+            }
 
-			if (tileentity != null) {
-				tileentity.readFromNBT(nbt);
-			} else {
-				//Create tile entity from data
-				tileentity = TileEntity.createAndLoadEntity(nbt);
-				if (tileentity != null) {
-					proxyworld.addTileEntity(tileentity);
-				}
-			}
-			proxyworld.markTileEntityChunkModified(xPos, yPos, zPos, tileentity);
-			proxyworld.setTileEntity(xPos, yPos, zPos, tileentity);
-			proxyworld.markBlockForUpdate(xPos, yPos, zPos);
-		}
-	}
+            proxyWorld.setTileEntity(pos, te);
+        }
+    }
 }

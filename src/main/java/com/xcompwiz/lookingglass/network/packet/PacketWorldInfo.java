@@ -1,82 +1,69 @@
 package com.xcompwiz.lookingglass.network.packet;
 
+import com.xcompwiz.lookingglass.LookingGlass;
+import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorld;
+import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
+import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
 import io.netty.buffer.ByteBuf;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.WorldServer;
+import net.minecraftforge.fml.common.FMLCommonHandler;
+import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
 
 import java.util.Collection;
 
-import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.ChunkCoordinates;
-import net.minecraft.world.WorldServer;
-
-import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
-import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
-import com.xcompwiz.lookingglass.log.LoggerUtils;
-
-import cpw.mods.fml.common.network.internal.FMLProxyPacket;
-
-/**
- * Based on code from Ken Butler/shadowking97
- */
 public class PacketWorldInfo extends PacketHandlerBase {
+    public static FMLProxyPacket createPacket(int dimension) {
+        WorldServer world = FMLCommonHandler.instance().getMinecraftServerInstance().getWorld(dimension);
+        if (world == null) {
+            LookingGlass.logger().warn("Server-side world for dimension {} is null", dimension);
+            return null;
+        }
+        BlockPos pos = world.getSpawnPoint();
+        int posX = pos.getX();
+        int posY = pos.getY();
+        int posZ = pos.getZ();
+        int skyLightSubtracted = world.getSkylightSubtracted();
+        float thunderingStrength = world.thunderingStrength;
+        float rainingStrength = world.rainingStrength;
+        long worldTime = world.provider.getWorldTime();
 
-	public static FMLProxyPacket createPacket(int dimension) {
-		WorldServer world = MinecraftServer.getServer().worldServerForDimension(dimension);
-		if (world == null) {
-			LoggerUtils.warn("Server-side world for dimension %i is null!", dimension);
-			return null;
-		}
-		ChunkCoordinates cc = world.provider.getSpawnPoint();
-		int posX = cc.posX;
-		int posY = cc.posY;
-		int posZ = cc.posZ;
-		int skylightSubtracted = world.skylightSubtracted;
-		float thunderingStrength = world.thunderingStrength;
-		float rainingStrength = world.rainingStrength;
-		long worldTime = world.provider.getWorldTime();
+        ByteBuf data = createDataBuffer(PacketWorldInfo.class);
 
-		// This line may look like black magic (and, well, it is), but it's actually just returning a class reference for this class. Copy-paste safe.
-		ByteBuf data = PacketHandlerBase.createDataBuffer((Class<? extends PacketHandlerBase>) new Object() {}.getClass().getEnclosingClass());
+        data.writeInt(dimension);
+        data.writeInt(posX).writeInt(posY).writeInt(posZ);
+        data.writeInt(skyLightSubtracted);
+        data.writeFloat(thunderingStrength);
+        data.writeFloat(rainingStrength);
+        data.writeLong(worldTime);
 
-		data.writeInt(dimension);
-		data.writeInt(posX);
-		data.writeInt(posY);
-		data.writeInt(posZ);
-		data.writeInt(skylightSubtracted);
-		data.writeFloat(thunderingStrength);
-		data.writeFloat(rainingStrength);
-		data.writeLong(worldTime);
+        return buildPacket(data);
+    }
 
-		return buildPacket(data);
-	}
+    @Override
+    public void handle(ByteBuf data, EntityPlayer player) {
+        int dimension = data.readInt();
+        BlockPos spawn = new BlockPos(data.readInt(), data.readInt(), data.readInt());
+        int skyLightSubtracted = data.readInt();
+        float thunderingStrength = data.readFloat();
+        float rainingStrength = data.readFloat();
+        long worldTime = data.readLong();
 
-	@Override
-	public void handle(ByteBuf in, EntityPlayer player) {
-		int dimension = in.readInt();
-		int posX = in.readInt();
-		int posY = in.readInt();
-		int posZ = in.readInt();
-		int skylightSubtracted = in.readInt();
-		float thunderingStrength = in.readFloat();
-		float rainingStrength = in.readFloat();
-		long worldTime = in.readLong();
+        WorldClient proxyWorld = ProxyWorldManager.getProxyWorld(dimension);
 
-		WorldClient proxyworld = ProxyWorldManager.getProxyworld(dimension);
+        if (proxyWorld == null) return;
+        if (proxyWorld.provider.getDimension() != dimension) return;
 
-		if (proxyworld == null) return;
-		if (proxyworld.provider.dimensionId != dimension) return;
-
-		ChunkCoordinates cc = new ChunkCoordinates();
-		cc.set(posX, posY, posZ);
-		Collection<WorldView> views = ProxyWorldManager.getWorldViews(dimension);
-		for (WorldView view : views) {
-			view.updateWorldSpawn(cc);
-		}
-		proxyworld.setSpawnLocation(posX, posY, posZ);
-		proxyworld.skylightSubtracted = skylightSubtracted;
-		proxyworld.thunderingStrength = thunderingStrength;
-		proxyworld.setRainStrength(rainingStrength);
-		proxyworld.setWorldTime(worldTime);
-	}
+        Collection<WorldView> views = ProxyWorldManager.getWorldViews(dimension);
+        for (WorldView view : views) {
+            view.updateWorldSpawn(spawn);
+        }
+        proxyWorld.setSpawnPoint(spawn);
+        proxyWorld.setSkylightSubtracted(skyLightSubtracted);
+        proxyWorld.rainingStrength = rainingStrength;
+        proxyWorld.thunderingStrength = thunderingStrength;
+        proxyWorld.setWorldTime(worldTime);
+    }
 }

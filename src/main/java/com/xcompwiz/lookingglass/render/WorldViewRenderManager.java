@@ -1,82 +1,88 @@
 package com.xcompwiz.lookingglass.render;
 
-import java.io.PrintStream;
-import java.util.Collection;
-
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityClientPlayerMP;
-import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.particle.EffectRenderer;
-import net.minecraft.client.renderer.RenderGlobal;
-import net.minecraft.client.renderer.entity.RenderManager;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.MathHelper;
-
+import com.xcompwiz.lookingglass.LookingGlass;
 import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
 import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
 import com.xcompwiz.lookingglass.client.render.RenderUtils;
-import com.xcompwiz.lookingglass.log.LoggerUtils;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.particle.ParticleManager;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.RenderGlobal;
+import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.entity.Entity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
+
+import java.io.PrintStream;
+import java.util.Collection;
 
 public class WorldViewRenderManager {
-	public static void onRenderTick(PrintStream printstream) {
-		Minecraft mc = Minecraft.getMinecraft();
-		Collection<WorldClient> worlds = ProxyWorldManager.getProxyworlds();
-		if (worlds == null || worlds.isEmpty()) return;
+    public static void onRenderTick(PrintStream logger) {
+        Minecraft mc = Minecraft.getMinecraft();
+        Collection<WorldClient> worlds = ProxyWorldManager.getProxyWorlds();
+        if (worlds == null || worlds.isEmpty()) return;
 
-		long renderT = Minecraft.getSystemTime();
-		//TODO: This and the renderWorldToTexture need to be remixed
-		WorldClient worldBackup = mc.theWorld;
-		RenderGlobal renderBackup = mc.renderGlobal;
-		EffectRenderer effectBackup = mc.effectRenderer;
-		EntityClientPlayerMP playerBackup = mc.thePlayer;
-		EntityLivingBase viewportBackup = mc.renderViewEntity;
+        long renderT = Minecraft.getSystemTime();
+        WorldClient worldBackup = mc.world;
+        RenderGlobal renderBackup = mc.renderGlobal;
+        ParticleManager effectBackup = mc.effectRenderer;
+        EntityPlayerSP playerBackup = mc.player;
+        Entity renderViewBackup = mc.getRenderViewEntity();
+        RenderManager renderManager = mc.getRenderManager();
 
-		//TODO: This is a hack to work around some of the vanilla rendering hacks... Yay hacks.
-		float fovmult = playerBackup.getFOVMultiplier();
-		ItemStack currentClientItem = playerBackup.inventory.getCurrentItem();
+        float fov = playerBackup.getFovModifier();
+        ItemStack currentClientItem = playerBackup.inventory.getCurrentItem();
 
-		for (WorldClient proxyworld : worlds) {
-			if (proxyworld == null) continue;
-			mc.theWorld = proxyworld;
-			RenderManager.instance.set(mc.theWorld);
-			for (WorldView activeview : ProxyWorldManager.getWorldViews(proxyworld.provider.dimensionId)) {
-				if (activeview.hasChunks() && activeview.markClean()) {
-					activeview.startRender(renderT);
+        for (WorldClient proxyWorld : worlds) {
+            if (proxyWorld == null) continue;
+            mc.world = proxyWorld;
+            renderManager.setWorld(mc.world);
+            for (WorldView activeView : ProxyWorldManager.getWorldViews(proxyWorld.provider.getDimension())) {
+                if (activeView.hasChunks() && activeView.markClean()) {
+                    activeView.startRender(renderT);
 
-					mc.renderGlobal = activeview.getRenderGlobal();
-					mc.effectRenderer = activeview.getEffectRenderer();
-					mc.renderViewEntity = activeview.camera;
-					mc.thePlayer = activeview.camera;
-					//Other half of hack
-					activeview.camera.setFOVMult(fovmult); //Prevents the FOV from flickering
-					activeview.camera.inventory.currentItem = playerBackup.inventory.currentItem;
-					activeview.camera.inventory.mainInventory[playerBackup.inventory.currentItem] = currentClientItem; //Prevents the hand from flickering
+                    mc.renderGlobal = activeView.getRenderGlobal();
+                    mc.effectRenderer = activeView.getEffectRenderer();
+                    mc.setRenderViewEntity(activeView.camera);
+                    mc.player = activeView.camera;
+                    activeView.camera.setFOVMult(fov);
+                    activeView.camera.inventory.currentItem = playerBackup.inventory.currentItem;
+                    activeView.camera.inventory.mainInventory.set(playerBackup.inventory.currentItem, currentClientItem);
 
-					try {
-						mc.renderGlobal.updateClouds();
-						mc.theWorld.doVoidFogParticles(MathHelper.floor_double(activeview.camera.posX), MathHelper.floor_double(activeview.camera.posY), MathHelper.floor_double(activeview.camera.posZ));
-						mc.effectRenderer.updateEffects();
-					} catch (Exception e) {
-						LoggerUtils.error("Client Proxy Dim had error while updating render elements: %s", e.getLocalizedMessage());
-						e.printStackTrace(printstream);
-					}
+                    try {
+                        mc.renderGlobal.updateClouds();
+                        mc.world.doVoidFogParticles(
+                                MathHelper.floor(activeView.camera.posX),
+                                MathHelper.floor(activeView.camera.posY),
+                                MathHelper.floor(activeView.camera.posZ)
+                        );
+                        mc.effectRenderer.updateEffects();
+                    } catch (Exception e) {
+                        LookingGlass.logger().error("Client Proxy Dimension had error while rendering: {}", e.getLocalizedMessage());
+                        e.printStackTrace(logger);
+                    }
 
-					try {
-						RenderUtils.renderWorldToTexture(0.1f, activeview.getFramebuffer(), activeview.width, activeview.height);
-					} catch (Exception e) {
-						LoggerUtils.error("Client Proxy Dim had error while rendering: %s", e.getLocalizedMessage());
-						e.printStackTrace(printstream);
-					}
-				}
-			}
-		}
-		mc.renderViewEntity = viewportBackup;
-		mc.thePlayer = playerBackup;
-		mc.effectRenderer = effectBackup;
-		mc.renderGlobal = renderBackup;
-		mc.theWorld = worldBackup;
-		RenderManager.instance.set(mc.theWorld);
-	}
+                    try {
+                        RenderUtils.renderWorldToTexture(0.1F, activeView.getFramebuffer(), activeView.width, activeView.height);
+                    } catch (Exception e) {
+                        LookingGlass.logger().error("Client Proxy Dimension had error while buffering: {}", e.getLocalizedMessage());
+                        e.printStackTrace(logger);
+                    }
+                }
+            }
+        }
 
+        Vec3d fog = worldBackup.getFogColor(1.0F);
+        GlStateManager.clearColor((float) fog.x, (float) fog.y, (float) fog.z, 0.0F);
+
+        mc.setRenderViewEntity(renderViewBackup);
+        mc.player = playerBackup;
+        mc.effectRenderer = effectBackup;
+        mc.renderGlobal = renderBackup;
+        mc.world = worldBackup;
+        renderManager.setWorld(mc.world);
+    }
 }

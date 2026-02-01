@@ -2,30 +2,26 @@ package com.xcompwiz.lookingglass.network;
 
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import cpw.mods.fml.common.network.internal.FMLProxyPacket;
+import net.minecraftforge.fml.common.network.internal.FMLProxyPacket;
 
-/**
- * @author Ken Butler/shadowking97
- */
-// TODO: This class doesn't need to exist, it's just a (Player, Packet) tuple
 public class PacketHolder {
-	EntityPlayer	player;
-	FMLProxyPacket	packet;
+    final EntityPlayer player;
+    final FMLProxyPacket packet;
 
-	public PacketHolder(EntityPlayer player, FMLProxyPacket packet) {
-		this.player = player;
-		this.packet = packet;
-	}
+    public PacketHolder(EntityPlayer player, FMLProxyPacket packet) {
+        this.player = player;
+        this.packet = packet;
+    }
 
-	public boolean belongsToPlayer(EntityPlayer p) {
-		return player.equals(p);
-	}
+    public boolean belongsToPlayer(EntityPlayer player) {
+        return this.player.equals(player);
+    }
 
-	public int sendPacket() {
-		if (packet != null) {
-			LookingGlassPacketManager.bus.sendTo(packet, (EntityPlayerMP) player);
-			return packet.payload().writerIndex();
-		}
-		return 0;
-	}
+    public int sendPacket() {
+        if (this.packet != null) {
+            LookingGlassPacketManager.bus.sendTo(this.packet, (EntityPlayerMP) this.player);
+            return this.packet.payload().writerIndex();
+        }
+        return 0;
+    }
 }

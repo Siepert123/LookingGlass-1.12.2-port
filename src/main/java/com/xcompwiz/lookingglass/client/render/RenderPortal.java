@@ -1,69 +1,84 @@
 package com.xcompwiz.lookingglass.client.render;
 
+import com.xcompwiz.lookingglass.api.view.IWorldView;
+import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorld;
+import com.xcompwiz.lookingglass.entity.EntityPortal;
+import com.xcompwiz.lookingglass.proxyworld.ModConfigs;
+import net.minecraft.client.renderer.BufferBuilder;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
 import net.minecraft.client.renderer.entity.Render;
-import net.minecraft.entity.Entity;
+import net.minecraft.client.renderer.entity.RenderManager;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import net.minecraft.util.ResourceLocation;
-
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.GL11;
 
-import com.xcompwiz.lookingglass.api.view.IWorldView;
-import com.xcompwiz.lookingglass.entity.EntityPortal;
+import javax.annotation.Nullable;
 
-public class RenderPortal extends Render {
+@SideOnly(Side.CLIENT)
+public class RenderPortal extends Render<EntityPortal> {
+    public RenderPortal(RenderManager renderManager) {
+        super(renderManager);
+    }
 
-	@Override
-	public void doRender(Entity entity, double d, double d1, double d2, float f, float f1) {
-		if (!(entity instanceof EntityPortal)) return;
-		EntityPortal portal = (EntityPortal) entity;
-		IWorldView activeview = portal.getActiveView();
-		if (activeview == null) return;
+    @Override
+    public void doRender(EntityPortal entity, double x, double y, double z, float entityYaw, float partialTicks) {
+        if (entity.world instanceof ProxyWorld && ModConfigs.disableRenderInRenderPortal) return; //Render-in-render? No! (maybe)
+        IWorldView activeView = entity.getActiveView();
+        if (activeView == null) return;
 
-		int texture = activeview.getTexture();
-		if (texture == 0) return;
+        int texture = activeView.getTexture();
+        if (texture == 0) return;
 
-		int width = 2;
-		int height = 3;
-		double left = -width / 2.;
-		double top = 0;
+        int width = 2;
+        int height = 3;
+        double left = -width / 2.0;
+        double top = 0.0;
 
-		activeview.markDirty();
-		GL11.glDisable(GL11.GL_ALPHA_TEST);
-		GL11.glDisable(GL11.GL_LIGHTING);
+        activeView.markDirty();
+        GlStateManager.disableAlpha();
+        GlStateManager.disableLighting();
 
-		GL11.glPushMatrix();
-		GL11.glTranslatef((float) d, (float) d1, (float) d2);
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(x, y, z);
 
-		GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture);
-		Tessellator tessellator = Tessellator.instance;
-		tessellator.setColorRGBA_F(1, 1, 1, 1);
-		tessellator.startDrawingQuads();
-		tessellator.addVertexWithUV(left, top, 0.0D, 0.0D, 0.0D); //inc=bl out; inc=bl down
-		tessellator.addVertexWithUV(width + left, top, 0.0D, 1.0D, 0.0D); //dc=br out; inc=br down
-		tessellator.addVertexWithUV(width + left, height + top, 0.0D, 1.0D, 1.0D); //dec=tr out; dec=tr up
-		tessellator.addVertexWithUV(left, height + top, 0.0D, 0.0D, 1.0D); //inc=lt out; dec=tl up
-		tessellator.draw();
-		GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-		//XXX: Make the back of the portals a little nicer
-		tessellator.setColorRGBA_F(0, 0, 1, 1);
-		tessellator.startDrawingQuads();
-		tessellator.addVertexWithUV(left, height + top, 0.0D, 0.0D, 1.0D);
-		tessellator.addVertexWithUV(width + left, height + top, 0.0D, 1.0D, 1.0D);
-		tessellator.addVertexWithUV(width + left, top, 0.0D, 1.0D, 0.0D);
-		tessellator.addVertexWithUV(left, top, 0.0D, 0.0D, 0.0D);
-		tessellator.draw();
-		GL11.glPopMatrix();
+        GlStateManager.bindTexture(texture);
+        GlStateManager.color(1, 1, 1);
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder builder = tessellator.getBuffer();
+        builder.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX);
+        builder.pos(left, top, 0.0).tex(0.0, 0.0).endVertex();
+        builder.pos(width + left, top, 0.0).tex(1.0, 0.0).endVertex();
+        builder.pos(width + left, height + top, 0.0).tex(1.0, 1.0).endVertex();
+        builder.pos(left, height + top, 0.0).tex(0.0, 1.0).endVertex();
+        tessellator.draw();
 
-		GL11.glEnable(GL11.GL_LIGHTING);
-		GL11.glEnable(GL11.GL_ALPHA_TEST);
-	}
+        GlStateManager.bindTexture(0);
+        GlStateManager.color(0, 0, 1);
+        builder.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION);
+        builder.pos(left, height + top, 0.0).endVertex();
+        builder.pos(width + left, height + top, 0.0).endVertex();
+        builder.pos(width + left, top, 0.0).endVertex();
+        builder.pos(left, top, 0.0).endVertex();
+        tessellator.draw();
 
-	@Override
-	protected void bindEntityTexture(Entity entity) {}
+        GlStateManager.color(1, 1, 1);
+        GlStateManager.popMatrix();
 
-	@Override
-	protected ResourceLocation getEntityTexture(Entity entity) {
-		return null;
-	}
+        GlStateManager.enableLighting();
+        GlStateManager.enableAlpha();
+    }
 
+    @Override
+    protected boolean bindEntityTexture(EntityPortal entity) {
+        return false;
+    }
+
+    @Nullable
+    @Override
+    protected ResourceLocation getEntityTexture(EntityPortal entity) {
+        return null;
+    }
 }

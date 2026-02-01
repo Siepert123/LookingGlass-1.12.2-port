@@ -1,150 +1,139 @@
 package com.xcompwiz.lookingglass.client.proxyworld;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.particle.EffectRenderer;
-import net.minecraft.client.renderer.RenderGlobal;
-import net.minecraft.util.ChunkCoordinates;
-import net.minecraft.util.MathHelper;
-
 import com.xcompwiz.lookingglass.api.animator.ICameraAnimator;
 import com.xcompwiz.lookingglass.api.view.IViewCamera;
 import com.xcompwiz.lookingglass.api.view.IWorldView;
 import com.xcompwiz.lookingglass.client.render.FrameBufferContainer;
 import com.xcompwiz.lookingglass.entity.EntityCamera;
-
-import cpw.mods.fml.relauncher.Side;
-import cpw.mods.fml.relauncher.SideOnly;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.particle.ParticleManager;
+import net.minecraft.client.renderer.RenderGlobal;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 
 @SideOnly(Side.CLIENT)
 public class WorldView implements IWorldView {
-	private WorldClient				worldObj;
-	public final ChunkCoordinates	coords;
-	public final EntityCamera		camera;
-	public final IViewCamera		camerawrapper;
+    private WorldClient world;
+    public final BlockPos pos;
+    public final EntityCamera camera;
+    public final IViewCamera cameraWrapper;
 
-	public final int				width;
-	public final int				height;
+    public final int width;
+    public final int height;
 
-	private boolean					update;
-	private boolean					ready;
-	private boolean					hasChunks;
-	private long					last_render_time	= -1;
+    private boolean update;
+    private boolean ready;
+    private boolean hasChunks;
+    private long lastRenderTime = -1L;
 
-	private RenderGlobal			renderGlobal;
-	private EffectRenderer			effectRenderer;
+    private RenderGlobal renderGlobal;
+    private ParticleManager effectRenderer;
 
-	private FrameBufferContainer	fbo;
+    private FrameBufferContainer fbo;
 
-	public WorldView(WorldClient worldObj, ChunkCoordinates coords, int width, int height) {
-		this.width = width;
-		this.height = height;
-		this.worldObj = worldObj;
-		this.coords = coords;
-		this.camera = new EntityCamera(worldObj, coords);
-		this.camerawrapper = new ViewCameraImpl(camera);
-		this.renderGlobal = new RenderGlobal(Minecraft.getMinecraft());
-		this.effectRenderer = new EffectRenderer(worldObj, Minecraft.getMinecraft().getTextureManager());
-		// Technically speaking, this is poor practice as it leaks a reference to the view before it's done constructing.
-		this.fbo = FrameBufferContainer.createNewFramebuffer(this, width, height);
-	}
+    public WorldView(WorldClient world, BlockPos pos, int width, int height) {
+        this.width = width;
+        this.height = height;
+        this.world = world;
+        this.pos = pos;
+        this.camera = new EntityCamera(this.world, this.pos);
+        this.cameraWrapper = new ViewCameraImpl(this.camera);
+        this.renderGlobal = new RenderGlobal(Minecraft.getMinecraft());
+        this.effectRenderer = new ParticleManager(this.world, Minecraft.getMinecraft().getTextureManager());
+        this.fbo = FrameBufferContainer.createNewFramebuffer(this, this.width, this.height);
+    }
 
-	/**
-	 * Explicitly shuts down the view. Informs the frame buffer manager that we don't want our framebuffer anymore (so it can be cleaned up for certain on the
-	 * next cleanup pass) and kills our fbo reference. The view is no longer usable after this is called.
-	 */
-	public void cleanup() {
-		this.fbo = null;
-		FrameBufferContainer.removeWorldView(this);
-	}
+    public void cleanup() {
+        this.fbo = null;
+        FrameBufferContainer.removeWorldView(this);
+    }
 
-	@Override
-	public boolean isReady() {
-		return fbo == null ? false : ready;
-	}
+    @Override
+    public boolean isReady() {
+        return this.fbo != null && this.ready;
+    }
 
-	public boolean hasChunks() {
-		return fbo == null ? false : hasChunks;
-	}
+    public boolean hasChunks() {
+        return this.fbo != null && this.hasChunks;
+    }
 
-	@Override
-	public void markDirty() {
-		update = true;
-	}
+    @Override
+    public void markDirty() {
+        this.update = true;
+    }
 
-	public boolean markClean() {
-		if (fbo == null) return false;
-		ready = true;
-		boolean temp = update;
-		update = false;
-		return temp;
-	}
+    public boolean markClean() {
+        if (this.fbo == null) return false;
+        this.ready = true;
+        boolean temp = this.update;
+        this.update = false;
+        return temp;
+    }
 
-	public int getFramebuffer() {
-		return fbo == null ? 0 : fbo.getFramebuffer();
-	}
+    public int getFramebuffer() {
+        return this.fbo == null ? 0 : this.fbo.getFramebuffer();
+    }
 
-	public RenderGlobal getRenderGlobal() {
-		return this.renderGlobal;
-	}
+    public RenderGlobal getRenderGlobal() {
+        return this.renderGlobal;
+    }
 
-	public EffectRenderer getEffectRenderer() {
-		return this.effectRenderer;
-	}
+    public ParticleManager getEffectRenderer() {
+        return this.effectRenderer;
+    }
 
-	@Override
-	public int getTexture() {
-		return fbo == null ? 0 : fbo.getTexture();
-	}
+    @Override
+    public int getTexture() {
+        return this.fbo == null ? 0 : this.fbo.getTexture();
+    }
 
-	@Override
-	public void grab() {}
+    @Override
+    public void grab() {
 
-	@Override
-	public boolean release() {
-		return false;
-	}
+    }
 
-	public void onChunkReceived(int cx, int cz) {
-		this.hasChunks = true;
-		int cam_cx = MathHelper.floor_double(this.camera.posX) >> 4;
-		int cam_cz = MathHelper.floor_double(this.camera.posZ) >> 4;
-		if (cam_cx >= cx - 1 && cam_cx <= cx + 1 && cam_cz > cz - 1 && cam_cz < cz + 1) this.camera.refreshAnimator();
-	}
+    @Override
+    public boolean release() {
+        return false;
+    }
 
-	public void updateWorldSpawn(ChunkCoordinates cc) {
-		this.camera.updateWorldSpawn(cc);
-	}
+    public void onChunkReceived(int cx, int cz) {
+        this.hasChunks = true;
+        int camCX = MathHelper.floor(this.camera.posX) >> 4;
+        int camCZ = MathHelper.floor(this.camera.posZ) >> 4;
+        if (camCX >= cx - 1 && camCX <= cx + 1 && camCZ > cz - 1 && camCZ < cz + 1) this.camera.refreshAnimator();
+    }
 
-	public void startRender(long renderT) {
-		if (this.last_render_time > 0) this.camera.tick(renderT - this.last_render_time);
-		this.last_render_time = renderT;
-	}
+    public void updateWorldSpawn(BlockPos pos) {
+        this.camera.updateWorldSpawn(pos);
+    }
 
-	@Override
-	public void setAnimator(ICameraAnimator animator) {
-		this.camera.setAnimator(animator);
-	}
+    public void startRender(long renderT) {
+        if (this.lastRenderTime > 0) this.camera.tick(renderT - this.lastRenderTime);
+        this.lastRenderTime = renderT;
+    }
 
-	@Override
-	public IViewCamera getCamera() {
-		return camerawrapper;
-	}
+    @Override
+    public void setAnimator(ICameraAnimator animator) {
+        this.camera.setAnimator(animator);
+    }
 
-	/**
-	 * This is a really complex bit. As we want to reuse the current client world when rendering, if possible, we need to handle when that world changes. We
-	 * could simply destroy all the views pointing to the existing proxy world, but that would be annoying to mods using the API. Instead, we replace our proxy
-	 * world with the new client world. This should only be called by LookingGlass, and only from the handling of the client world change detection.
-	 * @param world The new world
-	 */
-	public void replaceWorldObject(WorldClient world) {
-		this.worldObj = world;
-		this.camera.worldObj = world;
-		this.effectRenderer.clearEffects(world);
-		this.renderGlobal.setWorldAndLoadRenderers(world);
-	}
+    @Override
+    public IViewCamera getCamera() {
+        return this.cameraWrapper;
+    }
 
-	public WorldClient getWorldObj() {
-		return this.worldObj;
-	}
+    public void replaceWorld(WorldClient world) {
+        this.world = world;
+        this.camera.setWorld(world);
+        this.effectRenderer.clearEffects(world);
+        this.renderGlobal.setWorldAndLoadRenderers(world);
+    }
+
+    public WorldClient getWorld() {
+        return this.world;
+    }
 }
