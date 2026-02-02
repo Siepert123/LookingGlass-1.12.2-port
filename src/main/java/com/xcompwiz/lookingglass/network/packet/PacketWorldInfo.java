@@ -1,7 +1,6 @@
 package com.xcompwiz.lookingglass.network.packet;
 
 import com.xcompwiz.lookingglass.LookingGlass;
-import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorld;
 import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
 import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
 import io.netty.buffer.ByteBuf;

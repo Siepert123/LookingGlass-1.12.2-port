@@ -1,11 +1,9 @@
 package com.xcompwiz.lookingglass.client.render;
 
-import com.xcompwiz.lookingglass.LookingGlass;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.util.math.Vec3d;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.opengl.EXTFramebufferObject;

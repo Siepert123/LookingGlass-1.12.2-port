@@ -5,7 +5,6 @@ import com.xcompwiz.lookingglass.client.proxyworld.ProxyWorldManager;
 import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
 import com.xcompwiz.lookingglass.network.LookingGlassPacketManager;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.player.EntityPlayer;

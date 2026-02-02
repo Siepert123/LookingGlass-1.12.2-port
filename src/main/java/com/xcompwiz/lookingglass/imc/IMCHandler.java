@@ -16,7 +16,7 @@ public class IMCHandler {
     private static final Map<String, IMCProcessor> processors = new HashMap<>();
 
     static {
-        registerProcessor("api", new IMCAPIRegister());
+        registerProcessor("API", new IMCAPIRegister());
     }
 
     private static void registerProcessor(String key, IMCProcessor processor) {

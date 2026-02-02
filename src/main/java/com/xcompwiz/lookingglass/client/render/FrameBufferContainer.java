@@ -4,7 +4,6 @@ import com.google.common.collect.MapMaker;
 import com.xcompwiz.lookingglass.LookingGlass;
 import com.xcompwiz.lookingglass.client.proxyworld.WorldView;
 import org.lwjgl.opengl.EXTFramebufferObject;
-import org.lwjgl.opengl.EXTPackedDepthStencil;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL14;
 

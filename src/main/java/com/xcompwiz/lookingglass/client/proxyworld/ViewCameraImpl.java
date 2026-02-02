@@ -2,7 +2,6 @@ package com.xcompwiz.lookingglass.client.proxyworld;
 
 import com.xcompwiz.lookingglass.api.view.IViewCamera;
 import com.xcompwiz.lookingglass.entity.EntityCamera;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IBlockAccess;
 
 public class ViewCameraImpl implements IViewCamera {

@@ -1,7 +1,6 @@
 package com.xcompwiz.lookingglass.entity;
 
 import com.xcompwiz.lookingglass.api.animator.ICameraAnimator;
-import mcp.MethodsReturnNonnullByDefault;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
